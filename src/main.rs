@@ -1,3 +1,4 @@
+#[macro_use]
 extern crate futures;
 extern crate tokio;
 
@@ -26,12 +27,7 @@ where
     type Error = T::Error;
 
     fn poll(&mut self) -> Poll<(), T::Error> {
-        let value = match self.0.poll() {
-            Ok(Async::Ready(value)) => value,
-            Ok(Async::NotReady) => return Ok(Async::NotReady),
-            Err(err) => return Err(err),
-        };
-
+        let value = try_ready!(self.0.poll());
         println!("{}", value);
         Ok(Async::Ready(()))
     }
