@@ -3,37 +3,37 @@ extern crate futures;
 extern crate tokio;
 
 use futures::{Async, Future, Poll};
-use std::fmt;
+use tokio::net::{tcp::ConnectFuture, TcpStream};
 
-struct HelloWorld;
+struct GetPeerAddr {
+    connect: ConnectFuture,
+}
 
-impl Future for HelloWorld {
-    type Item = String;
+impl Future for GetPeerAddr {
+    type Item = ();
     type Error = ();
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        Ok(Async::Ready("hello world".to_string()))
-    }
-}
-
-struct Display<T>(T);
-
-impl<T> Future for Display<T>
-where
-    T: Future,
-    T::Item: fmt::Display,
-{
-    type Item = ();
-    type Error = T::Error;
-
-    fn poll(&mut self) -> Poll<(), T::Error> {
-        let value = try_ready!(self.0.poll());
-        println!("{}", value);
-        Ok(Async::Ready(()))
+        match self.connect.poll() {
+            Ok(Async::Ready(socket)) => {
+                println!("peer address = {}", socket.peer_addr().unwrap());
+                Ok(Async::Ready(()))
+            }
+            Ok(Async::NotReady) => Ok(Async::NotReady),
+            Err(e) => {
+                println!("failed to connect: {}", e);
+                Ok(Async::Ready(()))
+            }
+        }
     }
 }
 
 fn main() {
-    let future = Display(HelloWorld);
-    tokio::run(future);
+    let addr = "192.168.0.152:1234".parse().unwrap();
+    let connect_future = TcpStream::connect(&addr);
+    let get_peer_addr = GetPeerAddr {
+        connect: connect_future,
+    };
+
+    tokio::run(get_peer_addr);
 }
