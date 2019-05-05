@@ -4,15 +4,22 @@ extern crate tokio;
 
 use futures::{Async, Future, Poll, Stream};
 use std::fmt;
+use std::time::Duration;
+use tokio::timer::Interval;
 
 pub struct Fibonacci {
+    interval: Interval,
     curr: u64,
     next: u64,
 }
 
 impl Fibonacci {
-    fn new() -> Fibonacci {
-        Fibonacci { curr: 1, next: 1 }
+    fn new(duration: Duration) -> Fibonacci {
+        Fibonacci {
+            interval: Interval::new_interval(duration),
+            curr: 1,
+            next: 1,
+        }
     }
 }
 
@@ -23,6 +30,13 @@ impl Stream for Fibonacci {
     type Error = ();
 
     fn poll(&mut self) -> Poll<Option<u64>, ()> {
+        // wait until the next interval
+        try_ready!(self
+            .interval
+            .poll()
+            // the interval can fail if the Tokio runtime is unavailable,
+            // but in this example the error is ignored
+            .map_err(|_| ()));
         let curr = self.curr;
         let next = curr + self.next;
 
@@ -69,7 +83,7 @@ where
 }
 
 fn main() {
-    let fib = Fibonacci::new();
+    let fib = Fibonacci::new(Duration::from_secs(1));
     let display = Display10::new(fib);
 
     tokio::run(display);
