@@ -2,18 +2,37 @@ extern crate futures;
 extern crate tokio;
 
 use futures::{stream, Stream};
+use std::time::Duration;
+use tokio::timer::Interval;
 
-fn fibonacci() -> impl Stream<Item = u64, Error = ()> {
-    stream::unfold((1, 1), |(curr, next)| {
-        let new_next = curr + next;
-
-        Some(Ok((curr, (next, new_next))))
-    })
+struct Fibonacci {
+    curr: u64,
+    next: u64,
 }
 
 fn main() {
-    tokio::run(fibonacci().take(10).for_each(|num| {
+    let mut fib = Fibonacci { curr: 1, next: 1 };
+
+    let future = Interval::new_interval(Duration::from_secs(1)).map(move |_| {
+        let curr = fib.curr;
+        let next = curr + fib.next;
+
+        fib.curr = fib.next;
+        fib.next = next;
+
+        curr
+    });
+
+    tokio::run(future.take(10).map_err(|_| ()).for_each(|num| {
         println!("{}", num);
         Ok(())
     }));
+
+    // use concrete streams to convert values and iterators info streams
+    let values = vec!["one", "two", "three"];
+
+    tokio::run(stream::iter_ok(values).for_each(|value| {
+        println!("{}", value);
+        Ok(())
+    }))
 }
