@@ -2,16 +2,22 @@ extern crate futures;
 extern crate tokio;
 
 use futures::future::lazy;
+use futures::sync::oneshot;
+use futures::Future;
 
 fn main() {
     tokio::run(lazy(|| {
-        for i in 0..4 {
-            tokio::spawn(lazy(move || {
-                println!("Hello from task {}", i);
-                Ok(())
-            }));
-        }
+        let (tx, rx) = oneshot::channel();
 
-        Ok(())
+        tokio::spawn(lazy(|| {
+            tx.send("hello from spawned task");
+            Ok(())
+        }));
+
+        rx.and_then(|msg| {
+            println!("Got `{}`", msg);
+            Ok(())
+        })
+        .map_err(|e| println!("error = {:?}", e))
     }));
 }
