@@ -1,25 +1,32 @@
 extern crate futures;
 extern crate tokio;
 
-use futures::future::lazy;
-use futures::sync::mpsc;
-use futures::{stream, Future, Sink, Stream};
+use futures::{Future, Stream};
+use tokio::io;
+use tokio::net::TcpListener;
 
 fn main() {
-    tokio::run(lazy(|| {
-        let (tx, rx) = mpsc::channel(1_024);
+    let addr = "127.0.0.1:1234".parse().unwrap();
+    let listener = TcpListener::bind(&addr).unwrap();
+    tokio::run({
+        listener
+            .incoming()
+            .for_each(|socket| {
+                // inbound socket has been received
+                //
+                // spawn new task to process a socket
+                tokio::spawn({
+                    // write to socket
+                    io::write_all(socket, "hello world")
+                        // drop the socket
+                        .map(|_| ())
+                        // write any error to STDOUT
+                        .map_err(|e| println!("socket error = {:?}", e))
+                });
 
-        tokio::spawn(lazy(|| {
-            stream::iter_ok(0..10).fold(tx, |tx, i| {
-                tx.send(format!("Message {} from spawned task", i))
-                    .map_err(|e| println!("error = {:?}", e))
+                // receive next socket
+                Ok(())
             })
-            .map(|_| ()) // drop the tx handle
-        }));
-
-        rx.for_each(|msg| {
-            println!("Got `{}`", msg);
-            Ok(())
-        })
-    }));
+            .map_err(|e| println!("listener error = {:?}", e))
+    });
 }
